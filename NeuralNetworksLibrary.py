@@ -48,7 +48,14 @@ class Layer:
         self.bias = np.array([])
 
     def setWeights(self, array):
+        # specify dimensions
         self.weights = array.copy()
+    
+    def setDefaultWeights(self, previousN):
+        self.weights = np.full((self.n, previousN), 1 / (self.n * previousN))
+
+    def setDefaultBias(self):
+        self.bias = np.zeros(self.n)
 
     def setBias(self, array):
         self.bias = array.copy()
@@ -97,5 +104,5 @@ class Network:
             toMult = np.vstack([tempX[i - 1]] * buffer.size)
             toMult *= buffer.reshape(buffer.size, 1)
             self.layers[i - 1].weights -= step * toMult
-            buffer = temp @ buffer
+            buffer = buffer @ temp
         return self.errorFunc(x, y)
