@@ -1,6 +1,6 @@
-# this is a check of updating weights using gradient descent and backpropagation
-# result weights were to be equal to the ones calculated in the example you can find at
-# https://mattmazur.com/2015/03/17/a-step-by-step-backpropagation-example/
+# This is a check of updating weights using gradient descent and backpropagation.
+# Result weights are to be equal to the ones calculated in the example you can find at
+# https://mattmazur.com/2015/03/17/a-step-by-step-backpropagation-example/.
 
 
 import NeuralNetworksLibrary as nnl
@@ -20,7 +20,7 @@ model.addLayer(layer2)
 network = nnl.Network(model, nnl.squaredError)
 network1 = nnl.Network(model, nnl.squaredError)
 
-print(network.fit(np.array([0.05, 0.10]), np.array([0.01, 0.99])))
+print(network.fit(np.array([0.05, 0.10]), np.array([0.01, 0.99]), 0.5))
 print()
 for layer in network.layers:
     print(layer.weights)
