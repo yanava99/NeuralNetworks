@@ -7,12 +7,13 @@ import copy
 # It's going to be used when specifying activation functions for the layers.
 class ActivationFunction:
     def __init__(self, function, derivative, derivativeFromAnswer, multivariate=False):
-        self.func = function
         self.multivariate = multivariate
         if multivariate:
+            self.func = function
             self.derivativeFromAnswer = derivativeFromAnswer
             self.derivative = derivative
         else:
+            self.func = np.vectorize(function)
             self.derivativeFromAnswer = np.vectorize(derivativeFromAnswer)
             self.derivative = np.vectorize(derivative)
 
@@ -91,7 +92,7 @@ class Network:
         self.dimX = model.dimX
         self.dimY = model.dimY
         self.layers = copy.deepcopy(model.layers)
-        if self.layers[-1].n != self.dimY:
+        if len(self.layers) == 0 or self.layers[-1].n != self.dimY:
             newLayer = Layer(self.dimY, identity)
             self.layers.append(newLayer)
         for i in range(len(self.layers)):
@@ -132,7 +133,7 @@ class Network:
             self.layers[i].setDefaultBias()
 
     # Method for predicting.
-    def evaluate(self, x):
+    def decide(self, x):
         for layer in self.layers:
             x = layer.goThrough(x)
         if self.errorFunc == softmaxAndCrossEntropyBundleError:
