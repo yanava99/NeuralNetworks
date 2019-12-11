@@ -13,4 +13,4 @@ If you want to specify the initial weights and bias of a layer - this is the tim
 5. Add layers to the model. If the number of neurons on the last layer doesn't equal to the length of output one more layer with corresponding dimensions and *Identity* activation function is added when creating a network.
 6. Create a network based on a model, specify error function (choose either one of the implemented functions or create your own). Note, that *softmaxAndCrossEntropyBundleError* adds one more layer with a *softmax* activation function.
 7. Time to train the network. Method *fit()* is changing network parameters corresponding to given input and output. Learning rate may be specified (the default value is 0.1). Note, that *fit()* needs to be called for each element of training set individually.
-8. When a network is trained you can use *evaluate()* method to predict the output by given input.
+8. When a network is trained you can use *decide()* method to predict the output by given input.
