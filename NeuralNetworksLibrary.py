@@ -144,15 +144,15 @@ class Network:
 # Implementations of commonly used activation functions and their derivatives.
 
 def logisticFunction(x):
-    return 1 / (1 + np.exp(-x))
+    return 1. / (1. + np.exp(-x))
 
 
 def logisticDerivative(x):
-    return logisticFunction(x) * (1 - logisticFunction(x))
+    return logisticFunction(x) * (1. - logisticFunction(x))
 
 
 def logisticDerivativeFromAnswer(ans):
-    return ans * (1 - ans)
+    return ans * (1. - ans)
 
 
 def reLUFunction(x):
@@ -177,7 +177,7 @@ def reLUDerivativeFromAnswer(ans):
 
 
 def softmaxFunction(x):
-    div = 0
+    div = 0.
     maximum = np.amax(x)
     for xi in x:
         div += np.exp(xi - maximum)
@@ -190,7 +190,7 @@ def softmaxDerivative(x):
 
 
 def softmaxDerivativeFromAnswer(ans):
-    der = np.asarray([[- ans[i] * ans[j] if i != j else ans[i] * (1 - ans[i]) for j in range(ans.shape[0])]
+    der = np.asarray([[- ans[i] * ans[j] if i != j else ans[i] * (1. - ans[i]) for j in range(ans.shape[0])]
                       for i in range(ans.shape[0])])
     return der
 
@@ -200,11 +200,11 @@ def identityFunction(x):
 
 
 def identityDerivative(x):
-    return 1
+    return 1.
 
 
 def identityDerivativeFromAnswer(ans):
-    return 1
+    return 1.
 
 
 # Implementations of commonly used error functions and their derivatives.
@@ -213,7 +213,7 @@ def squaredErrorFunction(x, y):
     result = 0.
     for i in range(x.size):
         result += (y[i] - x[i])**2
-    result /= 2
+    result /= 2.
     return result
 
 
@@ -225,7 +225,7 @@ def crossEntropyErrorFunction(x, y):
     result = 0.
     for i in range(x.size):
         result += y[i] * np.log(x[i])
-    result *= -1
+    result *= -1.
     return result
 
 
