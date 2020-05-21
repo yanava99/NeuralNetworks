@@ -1,5 +1,6 @@
 import numpy as np
 import copy
+from math import ceil
 
 
 # Class ActivationFunction has 3 methods: call function itself, call it's derivative
@@ -103,17 +104,22 @@ class DenseLayer:
         self.updateWeights(np.average(gradWeights, axis=0), step)
         return gradient
 
+    def networkInit(self, prevN):
+        if self.weights.size == 0:
+            self.setDefaultWeights(prevN)
+        if self.bias.size == 0:
+            self.setDefaultBias()
+        return self.n
 
 
 # One-dimensional convolutional layer
 class Conv1DLayer:
-    def __init__(self, filters, kernelSize, function, n):
+    def __init__(self, filters, kernelSize, function):
         self.filters = filters
         self.kernelSize = kernelSize
         self.function = function
         self.kernelWeights = np.array([[[]]])
         self.bias = np.array([])
-        self.n = n
 
     def setKernelWeights(self, array):
         self.kernelWeights = array.copy()
@@ -127,26 +133,51 @@ class Conv1DLayer:
     def setDefaultBias(self):
         self.bias = np.zeros(self.filters)
 
+    # # padding is valid
+    # def goThrough(self, x):  # x is a 2-dimensional array (dim * channels)
+    #     output = np.zeros((x.shape[0] - self.kernelSize + 1, self.filters))
+    #     for i in range(self.filters):
+    #         for j in range(x.shape[0] - self.kernelSize + 1):
+    #             output[j, i] = np.sum(self.kernelWeights[i, :, :] * x[j: j + self.kernelSize, :]) + self.bias[i]
+    #     x = self.function(output)
+    #     return x
+
     # padding is valid
     def goThrough(self, x):  # x is a 2-dimensional array (dim * channels)
         output = np.zeros((x.shape[0] - self.kernelSize + 1, self.filters))
-        for i in range(self.filters):
-            for j in range(x.shape[0] - self.kernelSize + 1):
-                output[j, i] = np.sum(self.kernelWeights[i, :, :] * x[j: j + self.kernelSize, :]) + self.bias[i]
+        x_broaden = np.broadcast_to(x, (self.filters, x.shape[0], x.shape[1]))
+        for j in range(x.shape[0] - self.kernelSize + 1):
+            output[j, :] = np.sum(x_broaden[:, j: j + self.kernelSize, :] * self.kernelWeights, axis=(1, 2)) + self.bias
         x = self.function(output)
         return x
 
     # padding is valid
     def goThroughBatch(self, x):  # x is a 3-dimensional array (batchSize * dim * channels)
         output = np.zeros((x.shape[0], x.shape[1] - self.kernelSize + 1, self.filters))
-        for i in range(self.filters):
-            for j in range(x.shape[1] - self.kernelSize + 1):
-                output[:, j, i] = np.add(np.sum(np.multiply(x[:, j: j + self.kernelSize, :],
-                                                            self.kernelWeights[i, :, :]),
-                                                axis=(1,2)),
-                                         self.bias[i]).reshape(x.shape[0])
+        # x_broaden = np.broadcast_to(x, (x.shape[0], self.filters, x.shape[1], x.shape[2]))
+        x_broaden = np.repeat(x[:, np.newaxis, :, :], self.filters, 1)
+        w_broaden = np.broadcast_to(self.kernelWeights, (x.shape[0],
+                                                         self.kernelWeights.shape[0],
+                                                         self.kernelWeights.shape[1],
+                                                         self.kernelWeights.shape[2],
+                                                         ))
+        for j in range(x.shape[1] - self.kernelSize + 1):
+            output[:, j, :] = np.sum(x_broaden[:, :, j: j + self.kernelSize, :] * w_broaden, axis=(2, 3)) + \
+                              np.broadcast_to(self.bias, (x.shape[0], self.filters))
         x = self.function(output)
         return x
+
+    # # padding is valid
+    # def goThroughBatch(self, x):  # x is a 3-dimensional array (batchSize * dim * channels)
+    #     output = np.zeros((x.shape[0], x.shape[1] - self.kernelSize + 1, self.filters))
+    #     for i in range(self.filters):
+    #         for j in range(x.shape[1] - self.kernelSize + 1):
+    #             output[:, j, i] = np.add(np.sum(np.multiply(x[:, j: j + self.kernelSize, :],
+    #                                                         self.kernelWeights[i, :, :]),
+    #                                             axis=(1,2)),
+    #                                      self.bias[i]).reshape(x.shape[0])
+    #     x = self.function(output)
+    #     return x
 
     def updateKernelWeights(self, grad, step):
         self.kernelWeights -= step * grad
@@ -160,20 +191,33 @@ class Conv1DLayer:
             gradient = gradient @ self.function.derivativeFromAnswer(tempXAfter)  # Check this !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         else:
             gradient = gradient * self.function.derivativeFromAnswer(tempXAfter)
-        self.updateBias(gradient.sum(axis=0), step)
+        self.updateBias(np.sum(gradient, axis=0), step)
         gradKernelWeights = np.zeros((self.filters, self.kernelSize, channels))
-        for i in range(self.filters):
-            for a in range(self.kernelSize):
-                for ca in range(channels):
-                    gradKernelWeights[i, a, ca] = np.sum(gradient[:, i] * tempXBefore[a: a + tempXAfter.shape[0], ca])
+        # gradient_broaden = np.broadcast_to(np.transpose(gradient), (self.filters, self.kernelSize..., channels))
+        gradient_broaden = np.repeat(np.transpose(gradient)[:, :, np.newaxis], channels, 2)
+        tempXBefore_broaden = np.broadcast_to(tempXBefore, (self.filters, tempXBefore.shape[0], channels))
+        for j in range(self.kernelSize):
+            gradKernelWeights[:, j, :] = np.sum(gradient_broaden *
+                                                tempXBefore_broaden[:,
+                                                j: j + tempXBefore.shape[0] - self.kernelSize + 1, :],
+                                                axis=1)
+        # for i in range(self.filters):
+        #     for a in range(self.kernelSize):
+        #         for ca in range(channels):
+        #             gradKernelWeights[i, a, ca] = np.sum(gradient[:, i] * tempXBefore[a: a + tempXAfter.shape[0], ca])
         newGradient = np.zeros(tempXBefore.shape)
-        for ca in range(channels):
-            for j in range(tempXAfter.shape[0]):
-                newGradient[j, ca] = np.sum(np.pad(gradient,
-                                                   ((self.kernelSize - 1, 0), (0, 0)),
-                                                   'constant',
-                                                   constant_values=(0, 0))[j: j + self.kernelSize, :] *
-                                            np.transpose(self.kernelWeights[:, :, ca]))
+        gradient_broaden = np.pad(gradient_broaden,
+                                  ((0, 0), (self.kernelSize - 1, self.kernelSize - 1), (0, 0)),
+                                  'constant')
+        for j in range(tempXBefore.shape[0]):
+            newGradient[j, :] = np.sum(gradient_broaden[:, j: j + self.kernelSize, :] * self.kernelWeights, axis=(0, 1))
+    #     for ca in range(channels):
+    #         for j in range(tempXAfter.shape[0]):
+    #             newGradient[j, ca] = np.sum(np.pad(gradient,
+    #                                                ((self.kernelSize - 1, 0), (0, 0)),
+    #                                                'constant',
+    #                                                constant_values=(0, 0))[j: j + self.kernelSize, :] *
+    #                                         np.transpose(self.kernelWeights[:, :, ca]))
         gradient = newGradient
         self.updateKernelWeights(gradKernelWeights, step)
         return newGradient
@@ -181,34 +225,70 @@ class Conv1DLayer:
     def fitBatch(self, gradient, step, tempXBefore, tempXAfter):
         channels = tempXBefore.shape[2]
         if self.function.multivariate:
-            gradient = gradient @ self.function.derivativeFromAnswer(tempXAfter)  # Check this !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+            gradient = gradient @ self.function.derivativeFromAnswer(tempXAfter)  # Check this !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         else:
             gradient = gradient * self.function.derivativeFromAnswer(tempXAfter)
-        self.updateBias(np.average(gradient.sum(axis=1), axis=0), step)
+        self.updateBias(np.average(np.sum(gradient, axis=1), axis=0), step)
         gradKernelWeights = np.zeros((self.filters, self.kernelSize, channels))
-        for i in range(self.filters):
-            for a in range(self.kernelSize):
-                for ca in range(channels):
-                    # gradKernelWeights[i, a, ca] = np.sum(gradient[:, i] * tempXBefore[a: a + tempXAfter.shape[0], ca])
-                    gradKernelWeights[i, a, ca] = np.average(np.sum(gradient[:, :, i] *
-                                                                    tempXBefore[:, a: a + tempXAfter.shape[1], ca],
-                                                                    axis=1))
+        # gradient_broaden = np.broadcast_to(np.transpose(gradient),
+        #                                    (tempXAfter.dim[0], self.filters, self.kernelSize..., channels))
+        gradient_broaden = np.repeat(np.transpose(gradient, (0, 2, 1))[:, :, :, np.newaxis], channels, 3)
+        # tempXBefore_broaden = np.broadcast_to(tempXBefore, (self.filters, tempXBefore.shape[0], channels))
+        tempXBefore_broaden = np.repeat(tempXBefore[:, np.newaxis, :, :], self.filters, 1)
+        for j in range(self.kernelSize):
+            gradKernelWeights[:, j, :] = np.average(np.sum(gradient_broaden *
+                                                           tempXBefore_broaden[:, :,
+                                                           j: j + tempXBefore.shape[1] - self.kernelSize + 1, :],
+                                                           axis=2), axis=0)
         newGradient = np.zeros(tempXBefore.shape)
-        for ca in range(channels):
-            for j in range(tempXAfter.shape[1]):
-                newGradient[:, j, ca] = np.sum(np.matmul(
-                    np.pad(gradient,
-                           ((0, 0), (self.kernelSize - 1, 0), (0, 0)),
-                           'constant')
-                    [:, j: j + self.kernelSize, :],
-                    self.kernelWeights[:, :, ca]))
+        gradient_broaden = np.pad(gradient_broaden,
+                                  ((0, 0), (0, 0), (self.kernelSize - 1, self.kernelSize - 1), (0, 0)),
+                                  'constant')
+        w_broaden = np.broadcast_to(self.kernelWeights, (tempXAfter.shape[0], self.filters, self.kernelSize, channels))
+        for j in range(tempXBefore.shape[1]):
+            newGradient[:, j, :] = np.sum(gradient_broaden[:, :, j: j + self.kernelSize, :] * w_broaden, axis=(1, 2))
         gradient = newGradient
         self.updateKernelWeights(gradKernelWeights, step)
         return newGradient
 
+    # def fitBatch(self, gradient, step, tempXBefore, tempXAfter):
+    #     channels = tempXBefore.shape[2]
+    #     if self.function.multivariate:
+    #         gradient = gradient @ self.function.derivativeFromAnswer(tempXAfter)  # Check this !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    #     else:
+    #         gradient = gradient * self.function.derivativeFromAnswer(tempXAfter)
+    #     self.updateBias(np.average(gradient.sum(axis=1), axis=0), step)
+    #     gradKernelWeights = np.zeros((self.filters, self.kernelSize, channels))
+    #     for i in range(self.filters):
+    #         for a in range(self.kernelSize):
+    #             for ca in range(channels):
+    #                 # gradKernelWeights[i, a, ca] = np.sum(gradient[:, i] * tempXBefore[a: a + tempXAfter.shape[0], ca])
+    #                 gradKernelWeights[i, a, ca] = np.average(np.sum(gradient[:, :, i] *
+    #                                                                 tempXBefore[:, a: a + tempXAfter.shape[1], ca],
+    #                                                                 axis=1))
+    #     newGradient = np.zeros(tempXBefore.shape)
+    #     for ca in range(channels):
+    #         for j in range(tempXAfter.shape[1]):
+    #             newGradient[:, j, ca] = np.sum(np.matmul(
+    #                 np.pad(gradient,
+    #                        ((0, 0), (self.kernelSize - 1, 0), (0, 0)),
+    #                        'constant')
+    #                 [:, j: j + self.kernelSize, :],
+    #                 self.kernelWeights[:, :, ca]))
+    #     gradient = newGradient
+    #     self.updateKernelWeights(gradKernelWeights, step)
+    #     return newGradient
+
+    def networkInit(self, prevShape):
+        if self.kernelWeights.size == 0:
+            self.setDefaultKernelWeights(prevShape[1])
+        if self.bias.size == 0:
+            self.setDefaultBias()
+        return prevShape[0] - self.kernelSize + 1, self.filters
+
 
 class MaxPooling1DLayer:
-    def __init__(self, poolSize, n, strides=None):
+    def __init__(self, poolSize, strides=None):
         self.poolSize = poolSize
         if strides:
             self.strides = strides
@@ -216,11 +296,10 @@ class MaxPooling1DLayer:
             self.strides = poolSize
         self.inputShape = (0, 0)
         self.maxIndexes = np.asarray([])
-        self.n = n
+        self.n = -1
 
     def goThrough(self, x):
         self.inputShape = x.shape
-        # newX = []
         newSize = self.n // x.shape[1]
         newX = np.zeros((newSize, x.shape[1]))
         self.maxIndexes = np.zeros((newSize, x.shape[1]), dtype=int)
@@ -259,10 +338,13 @@ class MaxPooling1DLayer:
         gradient = newGradient
         return gradient
 
+    def networkInit(self, prevShape):
+        self.n = ceil(prevShape[0] / self.strides) * prevShape[1]
+        return self.n // prevShape[1], prevShape[1]
+
 
 class FlattenLayer:
-    def __init__(self, n):
-        self.n = n
+    def __init__(self):
         self.xShape = -1
 
     def goThrough(self, x):
@@ -286,6 +368,9 @@ class FlattenLayer:
     def updateParameters(self, step, batchSize):
         return
 
+    def networkInit(self, prevShape):
+        return prevShape[0] * prevShape[1]
+
 
 # Class Model sets structure of the future neural network.
 # It is changeable: you can add new layers.
@@ -301,7 +386,7 @@ class Model:
 
 # Class Network is not changeable, its entity is created on the base of a model.
 class Network:
-    def __init__(self, model, errorFunc, channels=1):  # add a default errorFunc
+    def __init__(self, model, errorFunc):  # add a default errorFunc
         self.dimX = model.dimX
         self.dimY = model.dimY
         self.layers = copy.deepcopy(model.layers)
@@ -323,26 +408,31 @@ class Network:
         #             self.layers[i].n = ceil(self.dimX // channels / self.layers[i].strides) * channels
         #         else:
         #             self.layers[i].n = ceil(self.layers[i - 1].n // channels / self.layers[i].strides) * channels
-        if len(self.layers) == 0 or self.layers[-1].n != self.dimY:
+        if len(self.layers) == 0:
             newLayer = DenseLayer(self.dimY, identity)
+            newLayer.networkInit(self.dimX)
             self.layers.append(newLayer)
-        for i in range(len(self.layers)):
-            if isinstance(self.layers[i], Conv1DLayer):
-                if self.layers[i].kernelWeights.size == 0:
-                    if i == 0 or not isinstance(self.layers[i - 1], Conv1DLayer):  # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-                        self.layers[i].setDefaultKernelWeights(channels)
-                    else:
-                        self.layers[i].setDefaultKernelWeights(self.layers[i - 1].filters)  # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-                if self.layers[i].bias.size == 0:
-                    self.layers[i].setDefaultBias()
-            elif isinstance(self.layers[i], DenseLayer):
-                if self.layers[i].weights.size == 0:
-                    if i == 0:
-                        self.layers[i].setDefaultWeights(self.dimX)
-                    else:
-                        self.layers[i].setDefaultWeights(self.layers[i - 1].n)
-                if self.layers[i].bias.size == 0:
-                    self.layers[i].setDefaultBias()
+        else:
+            temp = self.layers[0].networkInit(self.dimX)
+            for i in range(1, len(self.layers)):
+                temp = self.layers[i].networkInit(temp)
+        # for i in range(len(self.layers)):
+        #     if isinstance(self.layers[i], Conv1DLayer):
+        #         if self.layers[i].kernelWeights.size == 0:
+        #             if i == 0 or not isinstance(self.layers[i - 1], Conv1DLayer):  # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        #                 self.layers[i].setDefaultKernelWeights(channels)
+        #             else:
+        #                 self.layers[i].setDefaultKernelWeights(self.layers[i - 1].filters)  # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        #         if self.layers[i].bias.size == 0:
+        #             self.layers[i].setDefaultBias()
+        #     elif isinstance(self.layers[i], DenseLayer):
+        #         if self.layers[i].weights.size == 0:
+        #             if i == 0:
+        #                 self.layers[i].setDefaultWeights(self.dimX)
+        #             else:
+        #                 self.layers[i].setDefaultWeights(self.layers[i - 1].n)
+        #         if self.layers[i].bias.size == 0:
+        #             self.layers[i].setDefaultBias()
         self.errorFunc = errorFunc
 
     # Method for training the network.
